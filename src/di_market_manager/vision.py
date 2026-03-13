@@ -15,9 +15,14 @@ from di_market_manager.config import Config, TemplateDef
 # Cache of loaded template images (name → numpy array)
 _template_cache: dict[str, np.ndarray] = {}
 
+# Active config reference for Retina scaling
+_active_config: Config | None = None
+
 
 def load_templates(config: Config) -> None:
     """Pre-load all template images into cache."""
+    global _active_config
+    _active_config = config
     _template_cache.clear()
     for name, tdef in config.templates.items():
         path = config.project_dir / tdef.file
@@ -25,6 +30,14 @@ def load_templates(config: Config) -> None:
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if img is not None:
                 _template_cache[name] = img
+
+
+def _retina_scale(config: Config | None = None) -> int:
+    """Get the Retina scale factor from config."""
+    cfg = config or _active_config
+    if cfg:
+        return cfg.display.retina_scale
+    return 1
 
 
 def take_screenshot() -> np.ndarray:
@@ -44,7 +57,7 @@ def find_template(
     screenshot: np.ndarray | None = None,
     config: Config | None = None,
 ) -> tuple[int, int] | None:
-    """Find template on screen. Returns center (x, y) or None."""
+    """Find template on screen. Returns center (x, y) in logical coordinates, or None."""
     if name not in _template_cache:
         return None
 
@@ -62,17 +75,21 @@ def find_template(
 
     if max_val >= confidence:
         h, w = template.shape[:2]
+        # Physical pixel coordinates
         cx = max_loc[0] + w // 2
         cy = max_loc[1] + h // 2
-        return (cx, cy)
+        # Convert to logical coordinates for pyautogui
+        scale = _retina_scale(config)
+        return (cx // scale, cy // scale)
     return None
 
 
 def find_template_score(
     name: str,
     screenshot: np.ndarray | None = None,
+    config: Config | None = None,
 ) -> tuple[float, tuple[int, int] | None]:
-    """Find template and return (best_score, center_or_None)."""
+    """Find template and return (best_score, center_in_logical_coords_or_None)."""
     if name not in _template_cache:
         return (0.0, None)
 
@@ -86,15 +103,17 @@ def find_template_score(
     h, w = template.shape[:2]
     cx = max_loc[0] + w // 2
     cy = max_loc[1] + h // 2
-    return (max_val, (cx, cy))
+    scale = _retina_scale(config)
+    return (max_val, (cx // scale, cy // scale))
 
 
 def find_all_templates(
     name: str,
     confidence: float = 0.85,
     screenshot: np.ndarray | None = None,
+    config: Config | None = None,
 ) -> list[tuple[int, int]]:
-    """Find all instances of a template. Returns list of center (x, y)."""
+    """Find all instances of a template. Returns list of center (x, y) in logical coordinates."""
     if name not in _template_cache:
         return []
 
@@ -106,13 +125,14 @@ def find_all_templates(
     locations = np.where(result >= confidence)
 
     h, w = template.shape[:2]
+    scale = _retina_scale(config)
     points = []
     for pt in zip(*locations[::-1]):
-        cx = pt[0] + w // 2
-        cy = pt[1] + h // 2
+        cx = (pt[0] + w // 2) // scale
+        cy = (pt[1] + h // 2) // scale
         points.append((cx, cy))
 
-    # Deduplicate nearby points (within 10px)
+    # Deduplicate nearby points (within 10 logical pixels)
     if not points:
         return []
 
@@ -126,12 +146,19 @@ def find_all_templates(
 
 def wait_for_template(
     name: str,
-    timeout: float = 10,
-    poll_interval: float = 0.5,
+    timeout: float = 20,
+    poll_interval: float | None = None,
     confidence: float = 0.85,
     config: Config | None = None,
 ) -> tuple[int, int]:
-    """Poll until template appears. Raises TimeoutError."""
+    """Poll until template appears. Raises TimeoutError.
+
+    Uses config.timing.poll_interval if poll_interval is not specified.
+    """
+    if poll_interval is None:
+        cfg = config or _active_config
+        poll_interval = cfg.timing.poll_interval if cfg else 0.75
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         pos = find_template(name, confidence=confidence, config=config)
@@ -143,11 +170,11 @@ def wait_for_template(
 
 def click_template(
     name: str,
-    timeout: float = 10,
+    timeout: float = 20,
     confidence: float = 0.85,
     config: Config | None = None,
 ) -> tuple[int, int]:
-    """Find template, click its center. Returns position clicked."""
+    """Find template, click its center. Returns logical position clicked."""
     pos = wait_for_template(name, timeout=timeout, confidence=confidence, config=config)
     pyautogui.click(pos[0], pos[1])
     return pos
@@ -157,7 +184,7 @@ def ocr_region(region: tuple[int, int, int, int], scale: int = 4) -> str | None:
     """Screenshot region → preprocess → tesseract → parsed text.
 
     Args:
-        region: (x, y, w, h) pixel coordinates
+        region: (x, y, w, h) in logical pixel coordinates
         scale: upscale factor for small text
     """
     x, y, w, h = region

@@ -18,7 +18,7 @@ def _resolve_config(config_path: str | None) -> Config:
 @click.option("--config", "config_path", default=None, help="Path to config.yaml")
 @click.pass_context
 def cli(ctx: click.Context, config_path: str | None) -> None:
-    """DI Market Manager — Diablo Immortal marketplace price scanner."""
+    """DI Market Manager — Diablo Immortal marketplace price scanner (BlueStacks Air on macOS)."""
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = config_path
 
@@ -177,7 +177,7 @@ def setup_test(ctx: click.Context) -> None:
 
     click.echo("Matching templates...")
     for name, tdef in config.templates.items():
-        score, pos = find_template_score(name, screenshot=screenshot)
+        score, pos = find_template_score(name, screenshot=screenshot, config=config)
         if score >= tdef.confidence:
             click.echo(f"  {name:30s} \u2713 found ({score:.2f}) at {pos}")
         else:
@@ -191,6 +191,25 @@ def setup_test(ctx: click.Context) -> None:
                 click.echo(f"  {name:30s} \u2713 OCR: \"{text}\"")
             else:
                 click.echo(f"  {name:30s} \u2717 OCR failed (empty)")
+
+
+@setup.command("test-retina")
+@click.pass_context
+def setup_test_retina(ctx: click.Context) -> None:
+    """Test Retina display scaling — reports logical vs physical resolution."""
+    import pyautogui
+
+    from di_market_manager.vision import take_screenshot_pil
+
+    screenshot = take_screenshot_pil()
+    physical_w, physical_h = screenshot.size
+    logical_w, logical_h = pyautogui.size()
+    detected_scale = physical_w // logical_w if logical_w else 1
+
+    click.echo(f"Physical resolution: {physical_w}x{physical_h}")
+    click.echo(f"Logical resolution:  {logical_w}x{logical_h}")
+    click.echo(f"Detected scale:      {detected_scale}x")
+    click.echo(f"\nSet display.retina_scale: {detected_scale} in config.yaml")
 
 
 @setup.command("record-flow")

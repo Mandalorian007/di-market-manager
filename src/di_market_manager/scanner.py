@@ -10,7 +10,7 @@ from di_market_manager.game import (
     kill_game_process,
     launch_game,
     navigate_to_market,
-    press_esc_until_clear,
+    press_back_until_clear,
     search_gem,
 )
 from di_market_manager.vision import load_templates, ocr_price
@@ -26,14 +26,12 @@ def log(tag: str, **fields: object) -> None:
 def scan_gem_prices(config: Config, gem: GemDef) -> list[dict]:
     """Scan prices for a single gem. Returns list of price records."""
     prices = []
-    # Look for price regions — these are named like price_row_1, price_row_2, etc.
-    # or use a generic price_column region with listing_row_height
     price_column = config.regions.get("price_column")
     row_height_region = config.regions.get("listing_row_height")
     row_height = 60  # default
 
     if row_height_region:
-        row_height = row_height_region.h  # use h field as row height value
+        row_height = row_height_region.h
 
     # Check for individual row regions first
     row_regions = sorted(
@@ -43,7 +41,6 @@ def scan_gem_prices(config: Config, gem: GemDef) -> list[dict]:
 
     if row_regions:
         for i, (name, region) in enumerate(row_regions, 1):
-            raw_text = None
             price = ocr_price(
                 region.as_tuple(),
                 debug_dir=config.debug_dir,
@@ -65,7 +62,6 @@ def scan_gem_prices(config: Config, gem: GemDef) -> list[dict]:
                 log("ERROR", type="ocr_failed", gem=gem.slug, region=region.as_tuple(),
                     saved=f"debug/{gem.slug}_row{i}_*.png")
     elif price_column:
-        # Derive rows from price_column + row_height
         num_rows = price_column.h // row_height
         for i in range(num_rows):
             region = (
@@ -148,10 +144,11 @@ def run_scan_cycle(
             close_game(config)
     except TimeoutError as e:
         log("ERROR", type="timeout", error=str(e))
-        # Try recovery
         try:
-            press_esc_until_clear()
+            press_back_until_clear(config)
+            time.sleep(2)
             kill_game_process(config)
+            time.sleep(5)
         except Exception:
             pass
         raise
@@ -159,6 +156,7 @@ def run_scan_cycle(
         log("ERROR", type="unexpected", error=str(e))
         try:
             kill_game_process(config)
+            time.sleep(5)
         except Exception:
             pass
         raise

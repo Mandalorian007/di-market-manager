@@ -1,8 +1,8 @@
 # DI Market Manager
 
-Automated Diablo Immortal marketplace gem price scanner. Launches the game via Battle.net, navigates to the marketplace, OCRs gem prices, and logs structured price data to stdout. Runs on an hourly loop.
+Automated Diablo Immortal marketplace gem price scanner. Launches the game via BlueStacks Air, navigates to the marketplace, OCRs gem prices, and logs structured price data to stdout. Runs on an hourly loop.
 
-Built for a headless-ish AWS Lightsail instance (1024x768) where Battle.net auto-starts on boot.
+Built for a Mac Mini running BlueStacks Air (Android emulator).
 
 ## Requirements
 
@@ -10,21 +10,15 @@ Built for a headless-ish AWS Lightsail instance (1024x768) where Battle.net auto
 
 | Requirement | Details |
 |---|---|
-| OS | Linux (Lightsail) or macOS |
+| OS | macOS |
 | Python | 3.11+ |
-| Display | 1024x768, accessible via pyautogui (X11/Xvfb or native) |
-| Tesseract OCR | `tesseract-ocr` system package |
-| Battle.net | Running and logged in (auto-start on boot) |
-| Game | Diablo Immortal installed, Play button visible in Battle.net |
+| Display | Accessible via pyautogui (native macOS display) |
+| Tesseract OCR | `tesseract` via Homebrew |
+| BlueStacks Air | Installed and logged in |
+| Game | Diablo Immortal installed in BlueStacks |
 
 ### Install Tesseract
 
-**Ubuntu/Debian (Lightsail):**
-```bash
-sudo apt update && sudo apt install -y tesseract-ocr
-```
-
-**macOS:**
 ```bash
 brew install tesseract
 ```
@@ -46,7 +40,6 @@ Managed by uv. All pinned in `pyproject.toml`:
 ## Install
 
 ```bash
-# Clone and enter project
 cd di-market-manager
 
 # Install uv if needed
@@ -65,16 +58,24 @@ di-market-manager/
 ├── src/di_market_manager/
 │   ├── cli.py               # Click CLI entry point
 │   ├── config.py            # YAML config → dataclasses
-│   ├── vision.py            # template matching + OCR
-│   ├── game.py              # game lifecycle (launch, navigate, close)
+│   ├── vision.py            # template matching + OCR (Retina-aware)
+│   ├── game.py              # game lifecycle (launch, navigate, close via BlueStacks)
 │   └── scanner.py           # scan cycle + hourly loop
 ├── templates/               # PNG templates (auto-populated by setup)
 └── debug/                   # OCR failure screenshots (auto-populated)
 ```
 
-## Setup (Run on Lightsail)
+## Setup
 
-Before scanning, you need to capture UI templates and mark price regions. This must be done on the machine where the game runs, at the actual screen resolution.
+Before scanning, you need to capture UI templates and mark price regions. This must be done on the Mac Mini with BlueStacks Air running Diablo Immortal.
+
+### 0. Check Retina Scaling
+
+```bash
+uv run di-market setup test-retina
+```
+
+Reports physical vs logical resolution. Set `display.retina_scale` in `config.yaml` to match (2 for Retina, 1 for non-Retina).
 
 ### 1. Capture Templates and Regions
 
@@ -84,21 +85,22 @@ uv run di-market setup capture
 
 Opens an interactive matplotlib window showing a screenshot of the current screen. Click and drag to mark regions:
 
-- **Templates** — UI elements to locate (Play button, HUD indicator, market header, gem tab, search bar). Saved as cropped PNGs in `templates/`.
+- **Templates** — UI elements to locate (app icon, HUD indicator, market header, gem tab, search bar). Saved as cropped PNGs in `templates/`.
 - **Regions** — pixel areas to OCR (price column, individual price rows). Saved as coordinates in `config.yaml`.
 
 For each marked rectangle, you'll be prompted in the terminal:
 ```
-Region (83x32) at (512,384). Name (or Enter to skip): battlenet_play_button
+Region (83x32) at (512,384). Name (or Enter to skip): di_app_icon
 Type — [t]emplate or [r]egion? (default: t): t
-Saved template: battlenet_play_button.png (83x32)
+Saved template: di_app_icon.png (83x32)
 ```
 
 **Required templates** (names must match what `game.py` expects):
 
 | Template Name | What to Capture |
 |---|---|
-| `battlenet_play_button` | The Play button in Battle.net launcher |
+| `bluestacks_home` | BlueStacks home/launcher screen is visible |
+| `di_app_icon` | Diablo Immortal app icon on BlueStacks home |
 | `in_game_hud` | Any always-visible HUD element (health globe, minimap corner) |
 | `market_button` | The button/icon that opens the marketplace |
 | `market_header` | The marketplace window header |
@@ -124,11 +126,11 @@ Takes a fresh screenshot and reports match confidence for each template, plus OC
 
 ```
 Matching templates...
-  battlenet_play_button        ✓ found (0.92) at (512, 384)
-  market_header                ✗ not found (best: 0.61)
+  di_app_icon                    ✓ found (0.92) at (512, 384)
+  market_header                  ✗ not found (best: 0.61)
 
 Testing OCR on regions...
-  price_row_1                  ✓ OCR: "1,234"
+  price_row_1                    ✓ OCR: "1,234"
 ```
 
 Re-run `setup capture` for any template that doesn't match. Adjust `confidence` values in `config.yaml` if a template matches correctly but below the default 0.85 threshold.
@@ -195,8 +197,13 @@ All output is structured log lines on stdout:
 
 ```yaml
 game:
-  window_title: "Diablo Immortal"
-  process_name: "DiabloImmortal.exe"      # used by pkill/taskkill to force-close
+  process_name: "BlueStacks"
+  window_title: "BlueStacks"
+  app_package: "com.blizzard.diab"
+  select_all_method: "triple_click"     # triple_click, command_a, or long_press
+
+display:
+  retina_scale: 2                       # 1 for non-Retina, 2 for Retina
 
 gems:
   normal:
@@ -205,46 +212,57 @@ gems:
   legendary:
     - { name: Blood-Soaked Jade, slug: blood-soaked-jade, stars: 5 }
 
-templates:                                  # auto-populated by setup capture
-  battlenet_play_button:
-    file: "templates/battlenet_play_button.png"
-    confidence: 0.9                         # match threshold (0.0–1.0)
+templates:                               # auto-populated by setup capture
+  di_app_icon:
+    file: "templates/di_app_icon.png"
+    confidence: 0.85
 
-regions:                                    # auto-populated by setup capture
+regions:                                 # auto-populated by setup capture
   price_row_1: { x: 400, y: 200, w: 100, h: 60 }
 
 timing:
-  click_delay: [0.3, 0.8]                  # random delay range between clicks (seconds)
-  page_load_wait: [1.5, 3.0]               # random delay range after page loads
-  scan_interval_minutes: 60                 # loop interval
-  max_retries: 3                            # retries per operation before giving up
+  click_delay: [0.5, 1.5]              # random delay range between clicks (seconds)
+  page_load_wait: [3.0, 8.0]           # random delay range after page loads
+  scan_interval_minutes: 60
+  max_retries: 3
+  timeout_multiplier: 1.0              # scales all step timeouts globally
+  poll_interval: 0.75                  # seconds between template polls
+
+step_timeouts:                          # per-step timeouts (seconds, pre-multiplier)
+  launch_bluestacks: 60
+  wait_for_home: 120
+  launch_di_app: 180
+  navigate_to_market: 30
+  search_gem: 15
+  default: 20
 ```
 
 ## Error Handling
 
-- **Template not found** — retries up to `max_retries`, then ESC spam to clear UI, then force-kill and raise
+- **Template not found** — retries up to `max_retries`, then Back-press spam to clear UI, then force-kill and raise
 - **OCR failure** — logs error, saves debug screenshot to `debug/`, skips that listing, continues
-- **Game crash/disconnect** — detected by template timeout, force-kills game, restarts cycle
+- **Game crash/disconnect** — detected by template timeout, force-kills BlueStacks, restarts cycle
 - **3 consecutive full-cycle failures** — exits with code 1
 
 ## Troubleshooting
 
-**`setup capture` window doesn't open:**
-Needs a display. On Lightsail, connect via VNC/RDP or run with `DISPLAY=:0` if using Xvfb.
+**Retina scaling issues (clicks land in wrong place):**
+Run `uv run di-market setup test-retina` and set `display.retina_scale` in `config.yaml` to match the detected scale.
 
 **Template confidence too low:**
 Re-capture with `setup capture`. Avoid capturing regions that change (animations, dynamic text). Crop tightly to the static UI element. Lower the `confidence` value in `config.yaml` if the element has minor rendering variance.
 
 **OCR returns garbage:**
-Check `debug/` screenshots. The OCR pipeline expects light text on dark background (or vice versa). If the price region has complex backgrounds, you may need to adjust the preprocessing in `vision.py` (`ocr_region` function — threshold method, scale factor).
+Check `debug/` screenshots. The OCR pipeline expects light text on dark background (or vice versa). If the price region has complex backgrounds, adjust the preprocessing in `vision.py` (`ocr_region` function — threshold method, scale factor).
 
 **`tesseract` not found:**
-Ensure `tesseract-ocr` is installed system-wide and on PATH. Verify with `tesseract --version`.
+Ensure Tesseract is installed via Homebrew and on PATH. Verify with `tesseract --version`.
 
 **pyautogui can't take screenshots:**
-On Linux, requires X11. If running headless, set up Xvfb:
-```bash
-sudo apt install -y xvfb
-Xvfb :99 -screen 0 1024x768x24 &
-export DISPLAY=:99
-```
+macOS requires screen recording permission. Grant it in System Settings → Privacy & Security → Screen Recording for your terminal app.
+
+**Keyboard input not reaching BlueStacks:**
+Ensure BlueStacks is the focused window. If `pyautogui.typewrite()` doesn't work, try changing `select_all_method` in config. As a last resort, character input may need to be slowed down (increase the `interval` parameter in `typewrite`).
+
+**BlueStacks is sluggish:**
+Increase `timeout_multiplier` in `config.yaml` (e.g. 1.5 or 2.0) to globally scale all wait timeouts without editing each step.

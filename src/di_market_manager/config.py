@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -34,22 +33,33 @@ class Region:
 
 
 @dataclass
+class DisplayConfig:
+    retina_scale: int = 2
+
+
+@dataclass
 class TimingConfig:
-    click_delay: tuple[float, float] = (0.3, 0.8)
-    page_load_wait: tuple[float, float] = (1.5, 3.0)
+    click_delay: tuple[float, float] = (0.5, 1.5)
+    page_load_wait: tuple[float, float] = (3.0, 8.0)
     scan_interval_minutes: int = 60
     max_retries: int = 3
+    timeout_multiplier: float = 1.0
+    poll_interval: float = 0.75
 
 
 @dataclass
 class Config:
     config_path: Path
-    window_title: str = "Diablo Immortal"
-    process_name: str = "DiabloImmortal.exe"
+    window_title: str = "BlueStacks"
+    process_name: str = "BlueStacks"
+    app_package: str = "com.blizzard.diab"
+    select_all_method: str = "triple_click"
     gems: list[GemDef] = field(default_factory=list)
     templates: dict[str, TemplateDef] = field(default_factory=dict)
     regions: dict[str, Region] = field(default_factory=dict)
     timing: TimingConfig = field(default_factory=TimingConfig)
+    display: DisplayConfig = field(default_factory=DisplayConfig)
+    step_timeouts: dict[str, float] = field(default_factory=dict)
 
     @property
     def project_dir(self) -> Path:
@@ -63,6 +73,11 @@ class Config:
     def debug_dir(self) -> Path:
         return self.project_dir / "debug"
 
+    def get_timeout(self, step_name: str) -> float:
+        """Get the timeout for a named step, scaled by timeout_multiplier."""
+        raw = self.step_timeouts.get(step_name, self.step_timeouts.get("default", 20.0))
+        return raw * self.timing.timeout_multiplier
+
 
 def load_config(path: str | Path | None = None) -> Config:
     if path is None:
@@ -74,6 +89,8 @@ def load_config(path: str | Path | None = None) -> Config:
 
     game = raw.get("game", {})
     timing_raw = raw.get("timing", {})
+    display_raw = raw.get("display", {})
+    step_timeouts_raw = raw.get("step_timeouts", {})
 
     gems = []
     for category, gem_list in raw.get("gems", {}).items():
@@ -99,22 +116,30 @@ def load_config(path: str | Path | None = None) -> Config:
         if isinstance(r, dict) and "x" in r:
             regions[name] = Region(x=r["x"], y=r["y"], w=r["w"], h=r["h"])
 
-    click_delay = timing_raw.get("click_delay", [0.3, 0.8])
-    page_load_wait = timing_raw.get("page_load_wait", [1.5, 3.0])
+    click_delay = timing_raw.get("click_delay", [0.5, 1.5])
+    page_load_wait = timing_raw.get("page_load_wait", [3.0, 8.0])
 
     return Config(
         config_path=path,
-        window_title=game.get("window_title", "Diablo Immortal"),
-        process_name=game.get("process_name", "DiabloImmortal.exe"),
+        window_title=game.get("window_title", "BlueStacks"),
+        process_name=game.get("process_name", "BlueStacks"),
+        app_package=game.get("app_package", "com.blizzard.diab"),
+        select_all_method=game.get("select_all_method", "triple_click"),
         gems=gems,
         templates=templates,
         regions=regions,
+        display=DisplayConfig(
+            retina_scale=display_raw.get("retina_scale", 2),
+        ),
         timing=TimingConfig(
             click_delay=tuple(click_delay),
             page_load_wait=tuple(page_load_wait),
             scan_interval_minutes=timing_raw.get("scan_interval_minutes", 60),
             max_retries=timing_raw.get("max_retries", 3),
+            timeout_multiplier=timing_raw.get("timeout_multiplier", 1.0),
+            poll_interval=timing_raw.get("poll_interval", 0.75),
         ),
+        step_timeouts={k: float(v) for k, v in step_timeouts_raw.items()},
     )
 
 

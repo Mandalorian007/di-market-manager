@@ -1,6 +1,11 @@
 game:
-  window_title: "Diablo Immortal"
-  process_name: "DiabloImmortal.exe"
+  process_name: "BlueStacks"
+  window_title: "BlueStacks"
+  app_package: "com.blizzard.diab"
+  select_all_method: "triple_click"    # triple_click, command_a, or long_press
+
+display:
+  retina_scale: 2                      # 1 for non-Retina, 2 for Retina
 
 gems:
   normal:
@@ -20,7 +25,18 @@ templates: {}
 regions: {}
 
 timing:
-  click_delay: [0.3, 0.8]
-  page_load_wait: [1.5, 3.0]
+  click_delay: [0.5, 1.5]
+  page_load_wait: [3.0, 8.0]
   scan_interval_minutes: 60
   max_retries: 3
+  timeout_multiplier: 1.0             # scales all step timeouts globally
+  poll_interval: 0.75                 # seconds between wait_for_template polls
+
+# Per-step timeouts (seconds, before timeout_multiplier is applied)
+step_timeouts:
+  launch_bluestacks: 60
+  wait_for_home: 120
+  launch_di_app: 180
+  navigate_to_market: 30
+  search_gem: 15
+  default: 20
