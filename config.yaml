@@ -1,0 +1,26 @@
+game:
+  window_title: "Diablo Immortal"
+  process_name: "DiabloImmortal.exe"
+
+gems:
+  normal:
+    - { name: Tourmaline, slug: tourmaline }
+    - { name: Ruby, slug: ruby }
+    - { name: Sapphire, slug: sapphire }
+    - { name: Citrine, slug: citrine }
+    - { name: Topaz, slug: topaz }
+    - { name: Aquamarine, slug: aquamarine }
+  legendary:
+    - { name: Blood-Soaked Jade, slug: blood-soaked-jade, stars: 5 }
+
+# Auto-populated by `di-market setup capture`
+templates: {}
+
+# Auto-populated by `di-market setup capture` — pixel regions for OCR
+regions: {}
+
+timing:
+  click_delay: [0.3, 0.8]
+  page_load_wait: [1.5, 3.0]
+  scan_interval_minutes: 60
+  max_retries: 3

@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Captured templates and debug screenshots (machine-specific)
+templates/*.png
+debug/*.png
+
+# Recorded flows
+recordings/
