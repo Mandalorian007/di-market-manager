@@ -292,6 +292,121 @@ def notify_discord(s: Session, payload_json: str) -> dict:
     return result
 
 
+VALID_GEMS = {"citrine", "topaz", "sapphire", "aquamarine"}
+VALID_TIERS = {"400", "150", "100"}
+GEM_DISPLAY_NAMES = {
+    "citrine": "Citrine",
+    "topaz": "Topaz",
+    "sapphire": "Sapphire",
+    "aquamarine": "Aquamarine",
+}
+GEM_ORDER = ["citrine", "topaz", "sapphire", "aquamarine"]
+
+
+def _fmt_count(value: int) -> str:
+    """Format a count for display. 9999 means the query hit the cap."""
+    if value >= 9999:
+        return "10K+"
+    return f"{value:,}"
+
+
+def validate_scan_report(data: dict) -> list[str]:
+    """Validate a scan report data structure. Returns list of errors (empty = valid)."""
+    errors = []
+    if "gems" not in data:
+        errors.append("missing 'gems' key")
+        return errors
+    gems = data["gems"]
+    if not isinstance(gems, dict):
+        errors.append("'gems' must be an object")
+        return errors
+    for gem in VALID_GEMS:
+        if gem not in gems:
+            errors.append(f"missing gem '{gem}'")
+            continue
+        tiers = gems[gem]
+        if not isinstance(tiers, dict):
+            errors.append(f"'{gem}' must be an object")
+            continue
+        for tier in VALID_TIERS:
+            if tier not in tiers:
+                errors.append(f"'{gem}' missing tier '{tier}'")
+            elif not isinstance(tiers[tier], int) or tiers[tier] < 0:
+                errors.append(f"'{gem}[{tier}]' must be a non-negative integer")
+    for key in gems:
+        if key not in VALID_GEMS:
+            errors.append(f"unknown gem '{key}'")
+    if "errors" in data and not isinstance(data["errors"], list):
+        errors.append("'errors' must be an array of strings")
+    return errors
+
+
+def build_scan_report_payload(data: dict) -> str:
+    """Build a Discord webhook JSON payload from scan report data."""
+    import json
+
+    gems = data["gems"]
+    scan_errors = data.get("errors", [])
+
+    # Build fixed-width table
+    header = f"{'Gem':<12} {'≤400':>6} {'≤150':>6} {'≤100':>6}"
+    sep = "-" * len(header)
+    rows = []
+    for slug in GEM_ORDER:
+        name = GEM_DISPLAY_NAMES[slug]
+        tiers = gems[slug]
+        rows.append(
+            f"{name:<12} {_fmt_count(tiers['400']):>6} "
+            f"{_fmt_count(tiers['150']):>6} {_fmt_count(tiers['100']):>6}"
+        )
+
+    table = "\n".join([header, sep] + rows)
+
+    # Error section
+    if scan_errors:
+        error_text = "\n".join(f"• {e}" for e in scan_errors)
+    else:
+        error_text = "None"
+
+    desc = f"```\n{table}\n```\n**Errors Corrected**\n{error_text}"
+
+    payload = {
+        "embeds": [{
+            "title": "Market Scan Report",
+            "description": desc,
+            "color": 3447003,
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }]
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def notify_scan_report(s: Session, report_json: str) -> dict:
+    """Validate scan report data, build Discord embed, and send."""
+    import json
+
+    try:
+        data = json.loads(report_json)
+    except json.JSONDecodeError as exc:
+        result = {"action": "notify", "success": False, "error": f"invalid JSON: {exc}"}
+        s.record(**result)
+        return result
+
+    validation_errors = validate_scan_report(data)
+    if validation_errors:
+        result = {
+            "action": "notify",
+            "success": False,
+            "error": "validation failed",
+            "details": validation_errors,
+        }
+        s.record(**result)
+        return result
+
+    payload_json = build_scan_report_payload(data)
+    return notify_discord(s, payload_json)
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers (ported from game.py)
 # ---------------------------------------------------------------------------

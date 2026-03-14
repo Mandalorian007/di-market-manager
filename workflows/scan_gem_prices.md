@@ -55,7 +55,8 @@ Also include an **Errors Corrected** section listing every issue encountered and
 | `dimm numpad purchase <N>` | Set purchase limit |
 | `dimm locations` | List all template names |
 | `dimm kill` | Force kill BlueStacks |
-| `dimm notify '<json>'` | Send JSON payload to Discord |
+| `dimm notify scan-report '<json>'` | Send scan report to Discord |
+| `dimm notify raw '<json>'` | Send raw JSON payload to Discord |
 
 All commands return JSON to stdout.
 
@@ -153,24 +154,19 @@ dimm click exit_ok_button            # confirm exit
 ```
 
 ### 5. Post Results to Discord
-After presenting the Final Report table, post the results to Discord using a rich embed. Use inline fields with a zero-width space row break to display gems in a 2x2 grid:
+After presenting the Final Report table, post the results using the scan report command. Pass a clean data structure — the command handles all Discord formatting:
 ```bash
-dimm notify '{
-  "embeds": [{
-    "title": "Market Scan Report",
-    "color": 3447003,
-    "fields": [
-      {"name": "Citrine",    "value": "```\n≤400   <count>\n≤150   <count>\n≤100   <count>\n```", "inline": true},
-      {"name": "Topaz",      "value": "```\n≤400   <count>\n≤150   <count>\n≤100   <count>\n```", "inline": true},
-      {"name": "\u200b",     "value": "\u200b", "inline": false},
-      {"name": "Sapphire",   "value": "```\n≤400   <count>\n≤150   <count>\n≤100   <count>\n```", "inline": true},
-      {"name": "Aquamarine", "value": "```\n≤400   <count>\n≤150   <count>\n≤100   <count>\n```", "inline": true}
-    ],
-    "timestamp": "<ISO 8601 timestamp>"
-  }]
+dimm notify scan-report '{
+  "gems": {
+    "citrine":    {"400": <count>, "150": <count>, "100": <count>},
+    "topaz":      {"400": <count>, "150": <count>, "100": <count>},
+    "sapphire":   {"400": <count>, "150": <count>, "100": <count>},
+    "aquamarine": {"400": <count>, "150": <count>, "100": <count>}
+  },
+  "errors": ["<description of any errors corrected during the scan>"]
 }'
 ```
-Replace `<count>` with the actual values read during the scan (right-aligned, with commas for thousands). Replace `<timestamp>` with the current UTC time in ISO 8601 format. The `\u200b` field is a zero-width space that forces a row break between the two gem pairs.
+Replace `<count>` with integer values read during the scan. Use an empty array `[]` for errors if none occurred. Counts of 9999 (the query cap) display as "10K+" automatically.
 
 ## Error Recovery
 - If a `click` fails (template not found), take a `snapshot` and read it visually to assess current screen state.

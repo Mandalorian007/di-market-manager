@@ -203,14 +203,34 @@ def cmd_numpad(field: str, value: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-@cli.command("notify")
+@cli.group("notify")
+def cmd_notify() -> None:
+    """Send Discord notifications."""
+    pass
+
+
+@cmd_notify.command("raw")
 @click.argument("payload_json")
-def cmd_notify(payload_json: str) -> None:
-    """Send a Discord notification. PAYLOAD_JSON is the full JSON body."""
+def cmd_notify_raw(payload_json: str) -> None:
+    """Send a raw Discord webhook payload. PAYLOAD_JSON is the full JSON body."""
     from di_market_manager import actions
 
     s = _make_session()
     _output(actions.notify_discord(s, payload_json), success_key="success")
+
+
+@cmd_notify.command("scan-report")
+@click.argument("report_json")
+def cmd_notify_scan_report(report_json: str) -> None:
+    """Send a market scan report. REPORT_JSON is the scan data structure.
+
+    Expected format:
+    {"gems": {"citrine": {"400": N, "150": N, "100": N}, ...}, "errors": [...]}
+    """
+    from di_market_manager import actions
+
+    s = _make_session()
+    _output(actions.notify_scan_report(s, report_json), success_key="success")
 
 
 # ---------------------------------------------------------------------------
