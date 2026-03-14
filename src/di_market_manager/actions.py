@@ -293,7 +293,8 @@ def notify_discord(s: Session, payload_json: str) -> dict:
 
 
 VALID_GEMS = {"citrine", "topaz", "sapphire", "aquamarine"}
-VALID_TIERS = {"400", "150", "100"}
+VALID_TIERS = {"400", "160", "140", "120", "100", "80", "50"}
+TIER_ORDER = ["400", "160", "140", "120", "100", "80", "50"]
 GEM_DISPLAY_NAMES = {
     "citrine": "Citrine",
     "topaz": "Topaz",
@@ -301,6 +302,13 @@ GEM_DISPLAY_NAMES = {
     "aquamarine": "Aquamarine",
 }
 GEM_ORDER = ["citrine", "topaz", "sapphire", "aquamarine"]
+
+
+def _normalize_count(value: int) -> int:
+    """Normalize a raw count. A count of 1 is treated as 0 (UI display bug)."""
+    if value == 1:
+        return 0
+    return value
 
 
 def _fmt_count(value: int) -> str:
@@ -341,6 +349,16 @@ def validate_scan_report(data: dict) -> list[str]:
     return errors
 
 
+def _normalize_scan_data(data: dict) -> dict:
+    """Apply count normalization to scan data (count of 1 → 0 UI bug fix)."""
+    normalized = {"gems": {}, "errors": data.get("errors", [])}
+    for gem, tiers in data["gems"].items():
+        normalized["gems"][gem] = {
+            tier: _normalize_count(count) for tier, count in tiers.items()
+        }
+    return normalized
+
+
 def build_scan_report_payload(data: dict) -> str:
     """Build a Discord webhook JSON payload from scan report data."""
     import json
@@ -349,15 +367,15 @@ def build_scan_report_payload(data: dict) -> str:
     scan_errors = data.get("errors", [])
 
     # Build fixed-width table
-    header = f"{'Gem':<12} {'≤400':>6} {'≤150':>6} {'≤100':>6}"
+    header = f"{'Gem':<12} {'≤400':>6} {'≤160':>6} {'≤140':>6} {'≤120':>6} {'≤100':>6} {'≤80':>6} {'≤50':>6}"
     sep = "-" * len(header)
     rows = []
     for slug in GEM_ORDER:
         name = GEM_DISPLAY_NAMES[slug]
         tiers = gems[slug]
         rows.append(
-            f"{name:<12} {_fmt_count(tiers['400']):>6} "
-            f"{_fmt_count(tiers['150']):>6} {_fmt_count(tiers['100']):>6}"
+            f"{name:<12} "
+            + " ".join(f"{_fmt_count(tiers[t]):>6}" for t in TIER_ORDER)
         )
 
     table = "\n".join([header, sep] + rows)
@@ -403,7 +421,8 @@ def notify_scan_report(s: Session, report_json: str) -> dict:
         s.record(**result)
         return result
 
-    payload_json = build_scan_report_payload(data)
+    normalized = _normalize_scan_data(data)
+    payload_json = build_scan_report_payload(normalized)
     return notify_discord(s, payload_json)
 
 

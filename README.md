@@ -1,9 +1,9 @@
 # DI Market Manager
 
-Automated Diablo Immortal marketplace tool. Watches gem prices via the in-game Bulk Buy feature, with the goal of evolving into a fully automated market flipper.
+Automated Diablo Immortal marketplace tool. Scans gem prices via the in-game Bulk Buy feature, building toward a fully automated snipe-and-flip arbitrage system.
 
-**Phase 1 (current):** Price scanning — query gem supply at various price points, log structured data.
-**Phase 2 (planned):** Market flipping — buy underpriced gems and relist at market rate.
+**Phase 1 (current):** Price scanning — query gem supply at price tiers, log structured data, report to Discord.
+**Phase 2 (planned):** Arbitrage — buy underpriced gems and relist at market rate (the marketplace takes a 15% cut on every sale, so profitable flips require ≥17.65% spreads).
 
 Runs on a Mac Mini with BlueStacks Air (Android emulator). An LLM agent supervises workflows by calling CLI primitives and reading screenshots visually (no OCR for decision-making).
 
@@ -19,6 +19,8 @@ market_button → services_button → gem_tab → gem_citrine → bulk_buy_butto
 → repeat per gem/price point
 ```
 
+The scan workflow (`workflows/scan_gem_prices.md`) drives the agent through all gems and price tiers, then publishes a formatted report to Discord via `dimm notify scan-report`.
+
 ## Quick Start
 
 ```bash
@@ -30,7 +32,7 @@ cd di-market-manager
 uv sync
 
 # Verify
-uv run dimm locations    # list all known templates
+uv run dimm locations    # list all known templates and locations
 uv run dimm status       # is BlueStacks running?
 ```
 
@@ -43,7 +45,8 @@ Every command prints JSON to stdout. Exit code 0 = success, 1 = failure.
 ### Primitives
 
 ```bash
-dimm click market_button              # find template, click it
+dimm click market_button              # find template on screen, click it
+dimm click gem_citrine                # click a named location (fixed coordinates)
 dimm click --xy 500,300               # click raw coordinates
 dimm check market_header              # is template visible? → {visible, score}
 dimm wait 5                           # sleep N seconds
@@ -65,10 +68,38 @@ dimm numpad price 250                                     # open + clear + type 
 dimm numpad purchase 9999                                 # same for purchase field
 ```
 
+### Notifications
+
+```bash
+dimm notify raw '<json payload>'      # send raw Discord webhook payload
+dimm notify scan-report '<json>'      # send validated market scan report
+```
+
+The `scan-report` command validates the data structure, builds a formatted Discord embed with a fixed-width table, and posts it to the configured webhook.
+
+Expected format:
+
+```bash
+dimm notify scan-report '{
+  "gems": {
+    "citrine":    {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>},
+    "topaz":      {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>},
+    "sapphire":   {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>},
+    "aquamarine": {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>}
+  },
+  "errors": ["<description of any errors corrected during the scan>"]
+}'
+```
+
+- Gem names and tier keys are validated against known constants
+- Tier values must be non-negative integers
+- A count of 1 is automatically normalized to 0 (UI display bug)
+- Counts of 9999 (the query cap) display as "10K+"
+
 ### Discovery
 
 ```bash
-dimm locations                        # list all template names from config
+dimm locations                        # list all template and location names
 dimm regions                          # list all region names from config
 dimm workflows                        # list workflow prompt files
 ```
@@ -84,7 +115,7 @@ dimm setup record-flow                # record manual navigation (screenshots + 
 
 ### Validation
 
-Unknown templates are rejected at invocation:
+Unknown templates and locations are rejected at invocation:
 
 ```
 $ dimm click foo_bar
@@ -108,8 +139,9 @@ uv run dimm setup capture
 ```
 
 Opens a matplotlib window with a screenshot. Click-drag to mark UI elements:
-- **Templates** — buttons, headers, icons to locate via template matching. Saved as PNGs.
+- **Templates** — buttons, headers, icons to locate via template matching. Saved as PNGs in `templates/`.
 - **Regions** — pixel areas for numpad grids. Saved as coordinates in config.
+- **Locations** — fixed coordinate click targets (e.g., gem positions). Added manually to `config.yaml`.
 
 ### 3. Validate
 
@@ -118,6 +150,18 @@ uv run dimm setup test
 ```
 
 Reports match confidence for every template. Re-capture any that score below threshold.
+
+## Config
+
+`config.yaml` defines all valid targets, display settings, gems, and timing:
+
+- **`templates:`** — UI elements matched by image (file path + confidence threshold)
+- **`locations:`** — named click targets at fixed coordinates (e.g., `gem_citrine: {x: 847, y: 440}`)
+- **`regions:`** — rectangular areas for numpad grids
+- **`gems:`** — normal and legendary gem definitions
+- **`timing:`** — click delays, page load waits, scan intervals
+- **`step_timeouts:`** — per-step timeout limits for workflow phases
+- **`display:`** — Retina scaling factor
 
 ## Development
 
@@ -148,14 +192,14 @@ uv run dimm ...      # run CLI commands
 ```
 di-market-manager/
 ├── pyproject.toml
-├── config.yaml                  # templates, regions, gems, timing
+├── config.yaml                  # templates, locations, regions, gems, timing
 ├── src/di_market_manager/
 │   ├── cli.py                   # CLI commands (the public interface)
-│   ├── actions.py               # primitive implementations
+│   ├── actions.py               # primitive implementations + notifications
 │   ├── session.py               # Session (config + template cache + action log)
 │   ├── config.py                # YAML config → dataclasses
 │   └── vision.py                # template matching engine (Retina-aware)
-├── templates/                   # PNG templates (populated by setup capture)
+├── templates/                   # PNG templates (tracked in repo)
 ├── workflows/                   # agent prompt files
 │   └── scan_gem_prices.md       # bulk buy price scanning workflow
 └── snapshots/                   # screenshots from dimm snapshot
@@ -182,7 +226,7 @@ To capture multiple templates, run the command once per template with the game n
 
 **CLI as DSL.** Every UI interaction is a CLI command with validated arguments. The agent calls `dimm click market_button`, not a Python function. This makes workflows inspectable, replayable, and tool-agnostic.
 
-**Config as truth.** `config.yaml` defines all valid templates and regions. The CLI validates against it — unknown targets are rejected before any screen interaction happens.
+**Config as truth.** `config.yaml` defines all valid templates, locations, and regions. The CLI validates against it — unknown targets are rejected before any screen interaction happens.
 
 **Structured output.** Every command returns JSON. The agent parses results; humans pipe to `jq`.
 

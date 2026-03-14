@@ -1,7 +1,7 @@
 # Scan Gem Prices via Bulk Buy
 
 ## Goal
-Query current gem prices on the Diablo Immortal marketplace using the Bulk Buy feature as a query engine. Produce a summary table of supply at three price tiers for each gem.
+Query current gem prices on the Diablo Immortal marketplace using the Bulk Buy feature as a query engine. Produce a summary table of supply at seven price tiers for each gem.
 
 ## Agent Behavior
 Follow the workflow steps in order. After each command, verify the expected result before moving on. If something breaks — a click misses, a template isn't found, the UI is in an unexpected state — **intervene immediately**:
@@ -15,14 +15,18 @@ Do not blindly retry failed commands. Diagnose first, then act. Track every erro
 ## Final Report
 When the workflow is complete, present a **Market Scan Report** table:
 
-| Gem | Total on Market (≤400) | Count ≤150 | Count ≤100 |
-|-----|------------------------|------------|------------|
-| Citrine | | | |
-| Topaz | | | |
-| Sapphire | | | |
-| Aquamarine | | | |
+| Gem | ≤400 | ≤160 | ≤140 | ≤120 | ≤100 | ≤80 | ≤50 |
+|-----|------|------|------|------|------|-----|-----|
+| Citrine | | | | | | | |
+| Topaz | | | | | | | |
+| Sapphire | | | | | | | |
+| Aquamarine | | | | | | | |
 
-Fill each cell with the purchase count read from the Bulk Buy dialog at that price tier. If the result shows "NONE", record 0.
+Fill each cell with the purchase count read from the Bulk Buy dialog at that price tier.
+
+**Count of 1 = 0.** The game UI shows a count of 1 when there are actually zero gems available. Always record 1 as 0 in your report. The `dimm notify scan-report` command also applies this correction automatically.
+
+If the result shows "NONE", record 0.
 
 Also include an **Errors Corrected** section listing every issue encountered and how it was resolved. If none, report "None."
 
@@ -62,6 +66,11 @@ All commands return JSON to stdout.
 
 ## Gems to Scan
 `gem_citrine`, `gem_topaz`, `gem_sapphire`, `gem_aquamarine`
+
+## Price Tiers to Query
+`[400, 160, 140, 120, 100, 80, 50]`
+
+Scan in descending order (400 first, 50 last) for each gem.
 
 ## Workflow Steps
 
@@ -120,17 +129,21 @@ dimm click bulk_buy_button           # open Bulk Buy dialog
 dimm wait 2
 ```
 
-#### 3b. Query three price tiers
-For each price in `[400, 150, 100]`:
+#### 3b. Query price tiers (with early exit)
+Scan tiers in descending order: `[400, 160, 140, 120, 100, 80, 50]`.
+
+For each price:
 ```bash
 dimm numpad price <N>                # set price ceiling
 dimm numpad purchase 9999            # set max purchase (game caps at available)
 dimm snapshot --name "<gem>_<price>" # capture result
 ```
-**Read the snapshot visually** — record the purchase count shown. If "NONE", record 0.
+**Read the snapshot visually** — record the purchase count shown. If "NONE", record 0. If the count is 1, record 0 (UI display bug).
+
+**Early exit:** If a tier returns 0 or 1 (i.e., zero supply), skip all remaining lower tiers for this gem and record 0 for each. There cannot be supply at a lower price if there is none at a higher one.
 
 #### 3c. Return to gem listing
-After all three price queries for a gem, a single escape exits all the way to the HUD. Then re-enter the market:
+After all seven price queries for a gem, a single escape exits all the way to the HUD. Then re-enter the market:
 ```bash
 dimm press escape                    # exit Bulk Buy + market → back to HUD
 dimm wait 2
@@ -154,14 +167,14 @@ dimm click exit_ok_button            # confirm exit
 ```
 
 ### 5. Post Results to Discord
-After presenting the Final Report table, post the results using the scan report command. Pass a clean data structure — the command handles all Discord formatting:
+After presenting the Final Report table, post the results using the scan report command. Pass a clean data structure — the command handles all Discord formatting and normalizes counts of 1 to 0 automatically:
 ```bash
 dimm notify scan-report '{
   "gems": {
-    "citrine":    {"400": <count>, "150": <count>, "100": <count>},
-    "topaz":      {"400": <count>, "150": <count>, "100": <count>},
-    "sapphire":   {"400": <count>, "150": <count>, "100": <count>},
-    "aquamarine": {"400": <count>, "150": <count>, "100": <count>}
+    "citrine":    {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>},
+    "topaz":      {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>},
+    "sapphire":   {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>},
+    "aquamarine": {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>}
   },
   "errors": ["<description of any errors corrected during the scan>"]
 }'
