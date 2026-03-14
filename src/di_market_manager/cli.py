@@ -225,9 +225,10 @@ def cmd_notify_scan_report(report_json: str) -> None:
     """Send a market scan report. REPORT_JSON is the scan data structure.
 
     Expected format:
-    {"gems": {"citrine": {"400": N, "160": N, "140": N, "120": N, "100": N, "80": N, "50": N}, ...}, "errors": [...]}
+    {"gems": {"citrine": {"400": N, ...}, ...}, "totals": {"citrine": {"400": N, ...}, ...}, "errors": [...]}
 
-    A count of 1 is automatically treated as 0 (UI display bug).
+    The "gems" key holds supply counts per tier. The "totals" key (optional) holds
+    total platinum cost per tier. A count of 1 is automatically treated as 0 (UI display bug).
     """
     from di_market_manager import actions
 

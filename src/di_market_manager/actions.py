@@ -318,44 +318,66 @@ def _fmt_count(value: int) -> str:
     return f"{value:,}"
 
 
+def _validate_gem_tiers(data: dict, section: str) -> list[str]:
+    """Validate a gems-by-tier mapping (used for both 'gems' and 'totals')."""
+    errors = []
+    if not isinstance(data, dict):
+        errors.append(f"'{section}' must be an object")
+        return errors
+    for gem in VALID_GEMS:
+        if gem not in data:
+            errors.append(f"'{section}' missing gem '{gem}'")
+            continue
+        tiers = data[gem]
+        if not isinstance(tiers, dict):
+            errors.append(f"'{section}.{gem}' must be an object")
+            continue
+        for tier in VALID_TIERS:
+            if tier not in tiers:
+                errors.append(f"'{section}.{gem}' missing tier '{tier}'")
+            elif not isinstance(tiers[tier], int) or tiers[tier] < 0:
+                errors.append(f"'{section}.{gem}[{tier}]' must be a non-negative integer")
+    for key in data:
+        if key not in VALID_GEMS:
+            errors.append(f"'{section}' unknown gem '{key}'")
+    return errors
+
+
 def validate_scan_report(data: dict) -> list[str]:
     """Validate a scan report data structure. Returns list of errors (empty = valid)."""
     errors = []
     if "gems" not in data:
         errors.append("missing 'gems' key")
         return errors
-    gems = data["gems"]
-    if not isinstance(gems, dict):
-        errors.append("'gems' must be an object")
-        return errors
-    for gem in VALID_GEMS:
-        if gem not in gems:
-            errors.append(f"missing gem '{gem}'")
-            continue
-        tiers = gems[gem]
-        if not isinstance(tiers, dict):
-            errors.append(f"'{gem}' must be an object")
-            continue
-        for tier in VALID_TIERS:
-            if tier not in tiers:
-                errors.append(f"'{gem}' missing tier '{tier}'")
-            elif not isinstance(tiers[tier], int) or tiers[tier] < 0:
-                errors.append(f"'{gem}[{tier}]' must be a non-negative integer")
-    for key in gems:
-        if key not in VALID_GEMS:
-            errors.append(f"unknown gem '{key}'")
+    errors.extend(_validate_gem_tiers(data["gems"], "gems"))
+    if "totals" in data:
+        errors.extend(_validate_gem_tiers(data["totals"], "totals"))
     if "errors" in data and not isinstance(data["errors"], list):
         errors.append("'errors' must be an array of strings")
     return errors
 
 
 def _normalize_scan_data(data: dict) -> dict:
-    """Apply count normalization to scan data (count of 1 → 0 UI bug fix)."""
+    """Apply count normalization to scan data (count of 1 → 0 UI bug fix).
+
+    When a count is normalized to 0, the corresponding total is also zeroed.
+    """
     normalized = {"gems": {}, "errors": data.get("errors", [])}
+    totals = data.get("totals")
     for gem, tiers in data["gems"].items():
         normalized["gems"][gem] = {
             tier: _normalize_count(count) for tier, count in tiers.items()
         }
+    if totals:
+        normalized["totals"] = {}
+        for gem, tiers in totals.items():
+            normalized["totals"][gem] = {}
+            for tier, plat in tiers.items():
+                # Zero the total if the count was normalized to 0
+                if data["gems"][gem][tier] == 1:
+                    normalized["totals"][gem][tier] = 0
+                else:
+                    normalized["totals"][gem][tier] = plat
     return normalized
 
 

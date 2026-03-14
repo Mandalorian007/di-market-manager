@@ -1,7 +1,7 @@
 # Scan Gem Prices via Bulk Buy
 
 ## Goal
-Query current gem prices on the Diablo Immortal marketplace using the Bulk Buy feature as a query engine. Produce a summary table of supply at seven price tiers for each gem.
+Query current gem prices on the Diablo Immortal marketplace using the Bulk Buy feature as a query engine. Produce a summary of supply and cost basis at seven price tiers for each gem.
 
 ## Agent Behavior
 Follow the workflow steps in order. After each command, verify the expected result before moving on. If something breaks — a click misses, a template isn't found, the UI is in an unexpected state — **intervene immediately**:
@@ -13,8 +13,9 @@ Follow the workflow steps in order. After each command, verify the expected resu
 Do not blindly retry failed commands. Diagnose first, then act. Track every error you correct so you can report them at the end.
 
 ## Final Report
-When the workflow is complete, present a **Market Scan Report** table:
+When the workflow is complete, present two tables:
 
+### Supply Table (ceiling counts)
 | Gem | ≤400 | ≤160 | ≤140 | ≤120 | ≤100 | ≤80 | ≤50 |
 |-----|------|------|------|------|------|-----|-----|
 | Citrine | | | | | | | |
@@ -22,11 +23,26 @@ When the workflow is complete, present a **Market Scan Report** table:
 | Sapphire | | | | | | | |
 | Aquamarine | | | | | | | |
 
-Fill each cell with the purchase count read from the Bulk Buy dialog at that price tier.
+### Band Analysis (derived from adjacent tier subtraction)
+For each gem, show each price band with supply, average price, and break-even sell price (accounting for the 15% market fee):
 
-**Count of 1 = 0.** The game UI shows a count of 1 when there are actually zero gems available. Always record 1 as 0 in your report. The `dimm notify scan-report` command also applies this correction automatically.
+| Band | Supply | Avg Price | Break-even |
+|------|--------|-----------|------------|
 
-If the result shows "NONE", record 0.
+- **Supply** = count at ceiling minus count at next lower ceiling
+- **Avg Price** = (total at ceiling minus total at next lower ceiling) / band supply
+- **Break-even** = avg price / 0.85 (minimum sell price to profit after 15% fee)
+- Skip bands with zero supply.
+
+### How to read the Bulk Buy dialog
+Each snapshot of the Bulk Buy dialog shows two key values to record:
+
+1. **Purchase Limit** (left side) — the game caps this at the actual number of gems available at ≤ the price limit. This is the **count**.
+2. **Total** (right side, above the GET button) — the total platinum cost to buy all those gems. This is the **total cost**.
+
+Record both values for every tier query. If the result shows "NONE", record count = 0 and total = 0.
+
+**Count of 1 = 0.** The game UI shows a count of 1 when there are actually zero gems available. Always record 1 as 0 and total as 0 in your report. The `dimm notify scan-report` command also applies this correction automatically.
 
 Also include an **Errors Corrected** section listing every issue encountered and how it was resolved. If none, report "None."
 
@@ -34,7 +50,8 @@ Also include an **Errors Corrected** section listing every issue encountered and
 - Set **Price Limit** to a target platinum amount
 - Set **Purchase Limit** to 9999 (max)
 - The game caps the purchase count at the actual number of gems available at ≤ that price
-- Take a snapshot → read the purchase count visually
+- The **Total** (right side) shows the total platinum cost for that quantity
+- Take a snapshot → read both the **Purchase Limit** value (count) and the **Total** value (platinum cost) visually
 
 ## Prerequisites
 - BlueStacks Air running on macOS with Diablo Immortal installed
@@ -59,7 +76,7 @@ Also include an **Errors Corrected** section listing every issue encountered and
 | `dimm numpad purchase <N>` | Set purchase limit |
 | `dimm locations` | List all template names |
 | `dimm kill` | Force kill BlueStacks |
-| `dimm notify scan-report '<json>'` | Send scan report to Discord |
+| `dimm notify scan-report '<json>'` | Send scan report (counts + totals) to Discord |
 | `dimm notify raw '<json>'` | Send raw JSON payload to Discord |
 
 All commands return JSON to stdout.
@@ -138,7 +155,11 @@ dimm numpad price <N>                # set price ceiling
 dimm numpad purchase 9999            # set max purchase (game caps at available)
 dimm snapshot --name "<gem>_<price>" # capture result
 ```
-**Read the snapshot visually** — record the purchase count shown. If "NONE", record 0. If the count is 1, record 0 (UI display bug).
+**Read the snapshot visually** and record **two values**:
+1. The **Purchase Limit** number on the left side — this is the gem count (the game capped it at available supply).
+2. The **Total** platinum number on the right side (above the GET button) — this is the total cost.
+
+If "NONE" is shown, record count = 0 and total = 0. If the count is 1, record count = 0 and total = 0 (UI display bug).
 
 **Early exit:** If a tier returns 0 or 1 (i.e., zero supply), skip all remaining lower tiers for this gem and record 0 for each. There cannot be supply at a lower price if there is none at a higher one.
 
@@ -167,7 +188,7 @@ dimm click exit_ok_button            # confirm exit
 ```
 
 ### 5. Post Results to Discord
-After presenting the Final Report table, post the results using the scan report command. Pass a clean data structure — the command handles all Discord formatting and normalizes counts of 1 to 0 automatically:
+After presenting the Final Report tables, post the results using the scan report command. Pass both counts and totals — the command handles all Discord formatting and normalizes counts of 1 to 0 automatically:
 ```bash
 dimm notify scan-report '{
   "gems": {
@@ -176,10 +197,16 @@ dimm notify scan-report '{
     "sapphire":   {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>},
     "aquamarine": {"400": <count>, "160": <count>, "140": <count>, "120": <count>, "100": <count>, "80": <count>, "50": <count>}
   },
+  "totals": {
+    "citrine":    {"400": <plat>, "160": <plat>, "140": <plat>, "120": <plat>, "100": <plat>, "80": <plat>, "50": <plat>},
+    "topaz":      {"400": <plat>, "160": <plat>, "140": <plat>, "120": <plat>, "100": <plat>, "80": <plat>, "50": <plat>},
+    "sapphire":   {"400": <plat>, "160": <plat>, "140": <plat>, "120": <plat>, "100": <plat>, "80": <plat>, "50": <plat>},
+    "aquamarine": {"400": <plat>, "160": <plat>, "140": <plat>, "120": <plat>, "100": <plat>, "80": <plat>, "50": <plat>}
+  },
   "errors": ["<description of any errors corrected during the scan>"]
 }'
 ```
-Replace `<count>` with integer values read during the scan. Use an empty array `[]` for errors if none occurred. Counts of 9999 (the query cap) display as "10K+" automatically.
+Replace `<count>` with the purchase limit integer and `<plat>` with the total platinum cost integer read during the scan. Use an empty array `[]` for errors if none occurred. Counts of 9999 (the query cap) display as "10K+" automatically. Use 0 for totals at tiers that were skipped via early exit.
 
 ## Error Recovery
 - If a `click` fails (template not found), take a `snapshot` and read it visually to assess current screen state.
