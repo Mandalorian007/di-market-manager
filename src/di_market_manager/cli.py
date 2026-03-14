@@ -76,11 +76,14 @@ def cmd_click(target: str | None, xy: str | None) -> None:
             sys.exit(1)
         x, y = int(parts[0]), int(parts[1])
         _output(actions.click_coords(s, x, y))
+    elif target and target in s.config.locations:
+        loc = s.config.locations[target]
+        _output(actions.click_coords(s, loc.x, loc.y))
     elif target:
         _validate_template(s.config, target)
         _output(actions.click(s, target), success_key="success")
     else:
-        click.echo(json.dumps({"error": "Provide a template name or --xy x,y"}), err=True)
+        click.echo(json.dumps({"error": "Provide a template name, location name, or --xy x,y"}), err=True)
         sys.exit(1)
 
 
@@ -202,10 +205,11 @@ def cmd_numpad(field: str, value: int) -> None:
 
 @cli.command("locations")
 def cmd_locations() -> None:
-    """List all valid template names from config."""
+    """List all valid template and location names from config."""
     config = load_config()
     templates = sorted(config.templates.keys())
-    _output({"templates": templates, "count": len(templates)})
+    locations = {name: [loc.x, loc.y] for name, loc in sorted(config.locations.items())}
+    _output({"templates": templates, "locations": locations, "count": len(templates) + len(locations)})
 
 
 @cli.command("regions")

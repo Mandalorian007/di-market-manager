@@ -48,18 +48,6 @@ templates:
   gem_tab:
     file: templates/gem_tab.png
     confidence: 0.6
-  gem_citrine:
-    file: templates/gem_citrine.png
-    confidence: 0.6
-  gem_topaz:
-    file: templates/gem_topaz.png
-    confidence: 0.6
-  gem_sapphire:
-    file: templates/gem_sapphire.png
-    confidence: 0.6
-  gem_aquamarine:
-    file: templates/gem_aquamarine.png
-    confidence: 0.6
   bulk_buy_button:
     file: templates/bulk_buy_button.png
     confidence: 0.6
@@ -78,6 +66,19 @@ templates:
   bulk_buy_exit_button:
     file: templates/bulk_buy_exit_button.png
     confidence: 0.85
+locations:
+  gem_citrine:
+    x: 847
+    y: 440
+  gem_topaz:
+    x: 1449
+    y: 443
+  gem_sapphire:
+    x: 847
+    y: 630
+  gem_aquamarine:
+    x: 1449
+    y: 630
 regions:
   numpad:
     x: 1294

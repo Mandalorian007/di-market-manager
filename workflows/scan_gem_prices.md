@@ -112,7 +112,7 @@ For each gem in order (`gem_citrine`, `gem_topaz`, `gem_sapphire`, `gem_aquamari
 
 #### 3a. Select the gem and open Bulk Buy
 ```bash
-dimm click <gem_template>            # select the gem from listing
+dimm click <gem_name>                # select the gem (coordinate-based location)
 dimm wait 2
 dimm click bulk_buy_button           # open Bulk Buy dialog
 dimm wait 2
@@ -128,14 +128,19 @@ dimm snapshot --name "<gem>_<price>" # capture result
 **Read the snapshot visually** — record the purchase count shown. If "NONE", record 0.
 
 #### 3c. Return to gem listing
-After all three price queries for a gem:
+After all three price queries for a gem, a single escape exits all the way to the HUD. Then re-enter the market:
 ```bash
-dimm click bulk_buy_exit_button      # close Bulk Buy dialog
+dimm press escape                    # exit Bulk Buy + market → back to HUD
 dimm wait 2
-dimm click gem_tab                   # gem tab = gem marketplace; returns to normal gems listing
+dimm wait-for in_game_hud            # verify back on main screen
+dimm click market_button             # re-open NPC dialog
+dimm wait 3
+dimm click services_button           # NPC dialog → Market UI
+dimm wait-for gem_tab --timeout 30   # market UI loaded
+dimm click gem_tab                   # select normal gems listing
 dimm wait 2
 ```
-These two clicks in order return to the main gem listing, ready to select the next gem.
+**Important:** Use only one escape — it exits all the way to the HUD. A second escape from the HUD opens the quit dialog.
 
 ### 4. Exit
 ```bash

@@ -48,6 +48,13 @@ class TimingConfig:
 
 
 @dataclass
+class LocationDef:
+    name: str
+    x: int
+    y: int
+
+
+@dataclass
 class Config:
     config_path: Path
     window_title: str = "BlueStacks"
@@ -56,6 +63,7 @@ class Config:
     select_all_method: str = "triple_click"
     gems: list[GemDef] = field(default_factory=list)
     templates: dict[str, TemplateDef] = field(default_factory=dict)
+    locations: dict[str, LocationDef] = field(default_factory=dict)
     regions: dict[str, Region] = field(default_factory=dict)
     timing: TimingConfig = field(default_factory=TimingConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
@@ -107,6 +115,11 @@ def load_config(path: str | Path | None = None) -> Config:
                 confidence=t.get("confidence", 0.85),
             )
 
+    locations = {}
+    for name, loc in raw.get("locations", {}).items():
+        if isinstance(loc, dict) and "x" in loc and "y" in loc:
+            locations[name] = LocationDef(name=name, x=loc["x"], y=loc["y"])
+
     regions = {}
     for name, r in raw.get("regions", {}).items():
         if isinstance(r, dict) and "x" in r:
@@ -123,6 +136,7 @@ def load_config(path: str | Path | None = None) -> Config:
         select_all_method=game.get("select_all_method", "triple_click"),
         gems=gems,
         templates=templates,
+        locations=locations,
         regions=regions,
         display=DisplayConfig(
             retina_scale=display_raw.get("retina_scale", 2),
