@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
-from pathlib import Path
 
 import cv2
 import numpy as np
 import pyautogui
-import pytesseract
 from PIL import Image
 
-from di_market_manager.config import Config, TemplateDef
+from di_market_manager.config import Config
 
 # Cache of loaded template images (name → numpy array)
 _template_cache: dict[str, np.ndarray] = {}
@@ -180,72 +177,3 @@ def click_template(
     return pos
 
 
-def ocr_region(region: tuple[int, int, int, int], scale: int = 4) -> str | None:
-    """Screenshot region → preprocess → tesseract → parsed text.
-
-    Args:
-        region: (x, y, w, h) in logical pixel coordinates
-        scale: upscale factor for small text
-    """
-    x, y, w, h = region
-    pil_img = pyautogui.screenshot(region=(x, y, w, h))
-    img = np.array(pil_img)
-
-    # Grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-
-    # Scale up for better OCR on small text
-    gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-
-    # Adaptive threshold
-    thresh = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-    )
-
-    text = pytesseract.image_to_string(
-        thresh,
-        config="--psm 7 -c tessedit_char_whitelist=0123456789,",
-    ).strip()
-
-    return text if text else None
-
-
-def ocr_price(
-    region: tuple[int, int, int, int],
-    debug_dir: Path | None = None,
-    debug_label: str = "",
-) -> int | None:
-    """OCR a price region, return integer or None on failure."""
-    raw = ocr_region(region)
-    if raw is None:
-        if debug_dir:
-            _save_debug(region, debug_dir, debug_label)
-        return None
-
-    # Strip to digits only
-    digits = raw.replace(",", "").replace(".", "").replace(" ", "")
-    if not digits.isdigit():
-        if debug_dir:
-            _save_debug(region, debug_dir, debug_label)
-        return None
-
-    value = int(digits)
-    # Basic sanity check — prices shouldn't be negative or absurdly high
-    if value <= 0 or value > 100_000_000:
-        if debug_dir:
-            _save_debug(region, debug_dir, debug_label)
-        return None
-
-    return value
-
-
-def _save_debug(region: tuple[int, int, int, int], debug_dir: Path, label: str) -> Path:
-    """Save a debug screenshot of the failed OCR region."""
-    debug_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    name = f"{label}_{ts}.png" if label else f"ocr_fail_{ts}.png"
-    path = debug_dir / name
-    x, y, w, h = region
-    pil_img = pyautogui.screenshot(region=(x, y, w, h))
-    pil_img.save(str(path))
-    return path

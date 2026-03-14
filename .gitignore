@@ -9,9 +9,16 @@ wheels/
 # Virtual environments
 .venv
 
-# Captured templates and debug screenshots (machine-specific)
+# Captured templates (machine-specific)
 templates/*.png
+
+# Runtime artifacts
+snapshots/
+recordings/
 debug/*.png
 
-# Recorded flows
-recordings/
+# Debug/test screenshots in repo root
+/*.png
+
+# Temp files
+tmp/

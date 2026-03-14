@@ -1,38 +1,107 @@
 game:
-  process_name: "BlueStacks"
-  window_title: "BlueStacks"
-  app_package: "com.blizzard.diab"
-  select_all_method: "triple_click"    # triple_click, command_a, or long_press
-
+  process_name: BlueStacks
+  window_title: BlueStacks
+  app_package: com.blizzard.diab
+  select_all_method: triple_click
 display:
-  retina_scale: 2                      # 1 for non-Retina, 2 for Retina
-
+  retina_scale: 2
 gems:
   normal:
-    - { name: Tourmaline, slug: tourmaline }
-    - { name: Ruby, slug: ruby }
-    - { name: Sapphire, slug: sapphire }
-    - { name: Citrine, slug: citrine }
-    - { name: Topaz, slug: topaz }
-    - { name: Aquamarine, slug: aquamarine }
+  - name: Tourmaline
+    slug: tourmaline
+  - name: Ruby
+    slug: ruby
+  - name: Sapphire
+    slug: sapphire
+  - name: Citrine
+    slug: citrine
+  - name: Topaz
+    slug: topaz
+  - name: Aquamarine
+    slug: aquamarine
   legendary:
-    - { name: Blood-Soaked Jade, slug: blood-soaked-jade, stars: 5 }
-
-# Auto-populated by `di-market setup capture`
-templates: {}
-
-# Auto-populated by `di-market setup capture` — pixel regions for OCR
-regions: {}
-
+  - name: Blood-Soaked Jade
+    slug: blood-soaked-jade
+    stars: 5
+templates:
+  bluestacks_home_button:
+    file: templates/bluestacks_home_button.png
+    confidence: 0.85
+  di_app_icon:
+    file: templates/di_app_icon.png
+    confidence: 0.8
+  tap_to_play:
+    file: templates/tap_to_play.png
+    confidence: 0.5
+  enter_world:
+    file: templates/enter_world.png
+    confidence: 0.5
+  in_game_hud:
+    file: templates/in_game_hud.png
+    confidence: 0.85
+  market_button:
+    file: templates/market_button.png
+    confidence: 0.6
+  services_button:
+    file: templates/services_button.png
+    confidence: 0.6
+  gem_tab:
+    file: templates/gem_tab.png
+    confidence: 0.6
+  gem_citrine:
+    file: templates/gem_citrine.png
+    confidence: 0.6
+  gem_topaz:
+    file: templates/gem_topaz.png
+    confidence: 0.6
+  gem_sapphire:
+    file: templates/gem_sapphire.png
+    confidence: 0.6
+  gem_aquamarine:
+    file: templates/gem_aquamarine.png
+    confidence: 0.6
+  bulk_buy_button:
+    file: templates/bulk_buy_button.png
+    confidence: 0.6
+  exit_ok_button:
+    file: templates/exit_ok_button.png
+    confidence: 0.85
+  price_limit_title:
+    file: templates/price_limit_title.png
+    confidence: 0.85
+  purchase_limit_title:
+    file: templates/purchase_limit_title.png
+    confidence: 0.85
+  numpad:
+    file: templates/numpad.png
+    confidence: 0.85
+regions:
+  numpad:
+    x: 1294
+    y: 586
+    w: 597
+    h: 762
+  numpad_purchase:
+    x: 1099
+    y: 586
+    w: 586
+    h: 763
+  numpad_price:
+    x: 1099
+    y: 291
+    w: 586
+    h: 763
 timing:
-  click_delay: [0.5, 1.5]
-  page_load_wait: [3.0, 8.0]
+  click_delay:
+  - 0.5
+  - 1.5
+  page_load_wait:
+  - 3.0
+  - 8.0
   scan_interval_minutes: 60
   max_retries: 3
-  timeout_multiplier: 1.0             # scales all step timeouts globally
-  poll_interval: 0.75                 # seconds between wait_for_template polls
-
-# Per-step timeouts (seconds, before timeout_multiplier is applied)
+  timeout_multiplier: 1.0
+  poll_interval: 0.75
 step_timeouts:
   launch_bluestacks: 60
   wait_for_home: 120

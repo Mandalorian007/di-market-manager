@@ -1,268 +1,174 @@
 # DI Market Manager
 
-Automated Diablo Immortal marketplace gem price scanner. Launches the game via BlueStacks Air, navigates to the marketplace, OCRs gem prices, and logs structured price data to stdout. Runs on an hourly loop.
+Automated Diablo Immortal marketplace tool. Watches gem prices via the in-game Bulk Buy feature, with the goal of evolving into a fully automated market flipper.
 
-Built for a Mac Mini running BlueStacks Air (Android emulator).
+**Phase 1 (current):** Price scanning — query gem supply at various price points, log structured data.
+**Phase 2 (planned):** Market flipping — buy underpriced gems and relist at market rate.
 
-## Requirements
+Runs on a Mac Mini with BlueStacks Air (Android emulator). An LLM agent supervises workflows by calling CLI primitives and reading screenshots visually (no OCR for decision-making).
 
-### System
+## How It Works
 
-| Requirement | Details |
-|---|---|
-| OS | macOS |
-| Python | 3.11+ |
-| Display | Accessible via pyautogui (native macOS display) |
-| Tesseract OCR | `tesseract` via Homebrew |
-| BlueStacks Air | Installed and logged in |
-| Game | Diablo Immortal installed in BlueStacks |
+The CLI (`dimm`) exposes atomic UI primitives — click, check, wait, snapshot, numpad — that an agent chains together to navigate the game. Every command returns JSON to stdout.
 
-### Install Tesseract
+**Bulk Buy as a query engine:** Set Price Limit to a target (e.g., 150 platinum), set Purchase Limit to 9999, and the game caps the count at actual supply. The agent snapshots the result and reads the count visually.
 
-```bash
-brew install tesseract
+```
+market_button → services_button → gem_tab → gem_citrine → bulk_buy_button
+→ numpad price 150 → numpad purchase 9999 → snapshot → read result
+→ repeat per gem/price point
 ```
 
-Verify: `tesseract --version`
-
-### Python Dependencies
-
-Managed by uv. All pinned in `pyproject.toml`:
-
-- `pyautogui` — screenshot capture, mouse/keyboard automation
-- `opencv-python` — template matching
-- `Pillow` — image manipulation
-- `pytesseract` — Tesseract OCR Python bindings
-- `click` — CLI framework
-- `pyyaml` — config file parsing
-- `matplotlib` — interactive region capture viewer (setup only)
-
-## Install
+## Quick Start
 
 ```bash
-cd di-market-manager
-
 # Install uv if needed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install project + dependencies
+# Clone and install
+cd di-market-manager
 uv sync
+
+# Verify
+uv run dimm locations    # list all known templates
+uv run dimm status       # is BlueStacks running?
 ```
 
-## Project Structure
+macOS requires Screen Recording permission for your terminal (System Settings → Privacy & Security → Screen Recording).
+
+## CLI Reference
+
+Every command prints JSON to stdout. Exit code 0 = success, 1 = failure.
+
+### Primitives
+
+```bash
+dimm click market_button              # find template, click it
+dimm click --xy 500,300               # click raw coordinates
+dimm check market_header              # is template visible? → {visible, score}
+dimm wait 5                           # sleep N seconds
+dimm wait-for market_header           # block until template appears
+dimm press escape                     # press keyboard key
+dimm snapshot                         # screenshot + score all templates
+dimm snapshot --name "after_market"   # named snapshot
+dimm status                           # is BlueStacks running?
+dimm launch                           # open BlueStacks
+dimm kill                             # force kill BlueStacks
+```
+
+### Composites
+
+```bash
+dimm click-verify market_button market_header             # click + wait + verify
+dimm click-verify market_button market_header --delay 5   # custom delay
+dimm numpad price 250                                     # open + clear + type + confirm
+dimm numpad purchase 9999                                 # same for purchase field
+```
+
+### Discovery
+
+```bash
+dimm locations                        # list all template names from config
+dimm regions                          # list all region names from config
+dimm workflows                        # list workflow prompt files
+```
+
+### Setup
+
+```bash
+dimm setup capture                    # interactive template/region marking tool
+dimm setup test                       # validate templates against current screen
+dimm setup test-retina                # check Retina scaling factor
+dimm setup record-flow                # record manual navigation (screenshots + mouse)
+```
+
+### Validation
+
+Unknown templates are rejected at invocation:
 
 ```
-di-market-manager/
-├── pyproject.toml
-├── config.yaml              # gem list, timings, templates, regions
-├── src/di_market_manager/
-│   ├── cli.py               # Click CLI entry point
-│   ├── config.py            # YAML config → dataclasses
-│   ├── vision.py            # template matching + OCR (Retina-aware)
-│   ├── game.py              # game lifecycle (launch, navigate, close via BlueStacks)
-│   └── scanner.py           # scan cycle + hourly loop
-├── templates/               # PNG templates (auto-populated by setup)
-└── debug/                   # OCR failure screenshots (auto-populated)
+$ dimm click foo_bar
+{"error": "'foo_bar' is not a known template. Available: market_button, gem_tab, ..."}
 ```
 
 ## Setup
 
-Before scanning, you need to capture UI templates and mark price regions. This must be done on the Mac Mini with BlueStacks Air running Diablo Immortal.
-
-### 0. Check Retina Scaling
+### 1. Check Retina Scaling
 
 ```bash
-uv run di-market setup test-retina
+uv run dimm setup test-retina
 ```
 
-Reports physical vs logical resolution. Set `display.retina_scale` in `config.yaml` to match (2 for Retina, 1 for non-Retina).
+Set `display.retina_scale` in `config.yaml` to match (2 for Retina, 1 for non-Retina).
 
-### 1. Capture Templates and Regions
+### 2. Capture Templates and Regions
 
 ```bash
-uv run di-market setup capture
+uv run dimm setup capture
 ```
 
-Opens an interactive matplotlib window showing a screenshot of the current screen. Click and drag to mark regions:
+Opens a matplotlib window with a screenshot. Click-drag to mark UI elements:
+- **Templates** — buttons, headers, icons to locate via template matching. Saved as PNGs.
+- **Regions** — pixel areas for numpad grids. Saved as coordinates in config.
 
-- **Templates** — UI elements to locate (app icon, HUD indicator, market header, gem tab, search bar). Saved as cropped PNGs in `templates/`.
-- **Regions** — pixel areas to OCR (price column, individual price rows). Saved as coordinates in `config.yaml`.
-
-For each marked rectangle, you'll be prompted in the terminal:
-```
-Region (83x32) at (512,384). Name (or Enter to skip): di_app_icon
-Type — [t]emplate or [r]egion? (default: t): t
-Saved template: di_app_icon.png (83x32)
-```
-
-**Required templates** (names must match what `game.py` expects):
-
-| Template Name | What to Capture |
-|---|---|
-| `bluestacks_home` | BlueStacks home/launcher screen is visible |
-| `di_app_icon` | Diablo Immortal app icon on BlueStacks home |
-| `in_game_hud` | Any always-visible HUD element (health globe, minimap corner) |
-| `market_button` | The button/icon that opens the marketplace |
-| `market_header` | The marketplace window header |
-| `gem_tab` | The gem category tab in the marketplace |
-| `market_search_bar` | The search input field |
-
-**Required regions** (type `r` when prompted):
-
-| Region Name | What to Mark |
-|---|---|
-| `price_column` | The full column area containing listing prices |
-| `price_row_1` | First listing's price (for per-row OCR) |
-| `price_row_2` | Second listing's price |
-| ... | As many rows as visible |
-
-### 2. Validate Templates
+### 3. Validate
 
 ```bash
-uv run di-market setup test
+uv run dimm setup test
 ```
 
-Takes a fresh screenshot and reports match confidence for each template, plus OCR results for each region:
+Reports match confidence for every template. Re-capture any that score below threshold.
 
-```
-Matching templates...
-  di_app_icon                    ✓ found (0.92) at (512, 384)
-  market_header                  ✗ not found (best: 0.61)
+## Development
 
-Testing OCR on regions...
-  price_row_1                    ✓ OCR: "1,234"
-```
+### Tooling
 
-Re-run `setup capture` for any template that doesn't match. Adjust `confidence` values in `config.yaml` if a template matches correctly but below the default 0.85 threshold.
-
-### 3. Record Navigation Flow (Optional)
+- **uv** for dependency management and virtual environments
+- **Python 3.11+**
+- **hatchling** build backend
 
 ```bash
-uv run di-market setup record-flow --interval 2
+uv sync              # install/update all dependencies
+uv run dimm ...      # run CLI commands
 ```
 
-Records screenshots + mouse positions as you manually navigate the game UI. Outputs to `recordings/<timestamp>/`. Useful for understanding the exact click sequence needed — reference this when tuning `game.py` navigation functions.
+### Dependencies
 
-## Usage
+| Package | Purpose |
+|---------|---------|
+| `pyautogui` | Screenshots, mouse/keyboard automation |
+| `opencv-python` | Template matching (TM_CCOEFF_NORMED) |
+| `Pillow` | Image manipulation |
+| `click` | CLI framework |
+| `pyyaml` | Config parsing |
+| `matplotlib` | Interactive capture tool (setup only) |
 
-### Single Scan
-
-```bash
-# Full cycle: launch game → navigate → scan all gems → close game
-uv run di-market scan
-
-# Scan one gem only
-uv run di-market scan --gem tourmaline
-
-# Game is already open and in the marketplace
-uv run di-market scan --skip-launch --skip-close
-```
-
-### Hourly Loop
-
-```bash
-# Wait one interval, then scan every 60 minutes
-uv run di-market start
-
-# Scan immediately on start, then every 60 minutes
-uv run di-market start --immediate
-```
-
-Pipe to a log file:
-```bash
-uv run di-market start --immediate 2>&1 | tee market.log
-```
-
-### Custom Config Path
-
-```bash
-uv run di-market --config /path/to/config.yaml scan
-```
-
-## Output Format
-
-All output is structured log lines on stdout:
+### Project Structure
 
 ```
-2026-03-12 14:00:05 [SCAN] event=cycle_start
-2026-03-12 14:01:12 [PRICE] gem=tourmaline category=normal price=1234 position=1 page=1
-2026-03-12 14:01:25 [PRICE] gem=blood-soaked-jade category=legendary stars=5 price=128000 position=1 page=1
-2026-03-12 14:03:30 [SCAN] event=cycle_end duration=145s gems_scanned=8 gems_failed=0
-2026-03-12 14:03:30 [ERROR] type=ocr_failed gem=topaz region=(400,300,80,20) saved=debug/topaz_*.png
+di-market-manager/
+├── pyproject.toml
+├── config.yaml                  # templates, regions, gems, timing
+├── src/di_market_manager/
+│   ├── cli.py                   # CLI commands (the public interface)
+│   ├── actions.py               # primitive implementations
+│   ├── session.py               # Session (config + template cache + action log)
+│   ├── config.py                # YAML config → dataclasses
+│   └── vision.py                # template matching engine (Retina-aware)
+├── templates/                   # PNG templates (populated by setup capture)
+├── workflows/                   # agent prompt files
+│   └── scan_gem_prices.md       # bulk buy price scanning workflow
+└── snapshots/                   # screenshots from dimm snapshot
 ```
 
-## Config Reference
+### Design Principles
 
-`config.yaml` — edit directly or let `setup capture` populate the `templates` and `regions` sections.
+**CLI as DSL.** Every UI interaction is a CLI command with validated arguments. The agent calls `dimm click market_button`, not a Python function. This makes workflows inspectable, replayable, and tool-agnostic.
 
-```yaml
-game:
-  process_name: "BlueStacks"
-  window_title: "BlueStacks"
-  app_package: "com.blizzard.diab"
-  select_all_method: "triple_click"     # triple_click, command_a, or long_press
+**Config as truth.** `config.yaml` defines all valid templates and regions. The CLI validates against it — unknown targets are rejected before any screen interaction happens.
 
-display:
-  retina_scale: 2                       # 1 for non-Retina, 2 for Retina
+**Structured output.** Every command returns JSON. The agent parses results; humans pipe to `jq`.
 
-gems:
-  normal:
-    - { name: Tourmaline, slug: tourmaline }
-    # ...
-  legendary:
-    - { name: Blood-Soaked Jade, slug: blood-soaked-jade, stars: 5 }
+**Agent as supervisor.** The LLM agent reads screenshots visually (multimodal) and decides what to do next. The CLI primitives are its tools. Error recovery is the agent's job, not hardcoded retry loops.
 
-templates:                               # auto-populated by setup capture
-  di_app_icon:
-    file: "templates/di_app_icon.png"
-    confidence: 0.85
-
-regions:                                 # auto-populated by setup capture
-  price_row_1: { x: 400, y: 200, w: 100, h: 60 }
-
-timing:
-  click_delay: [0.5, 1.5]              # random delay range between clicks (seconds)
-  page_load_wait: [3.0, 8.0]           # random delay range after page loads
-  scan_interval_minutes: 60
-  max_retries: 3
-  timeout_multiplier: 1.0              # scales all step timeouts globally
-  poll_interval: 0.75                  # seconds between template polls
-
-step_timeouts:                          # per-step timeouts (seconds, pre-multiplier)
-  launch_bluestacks: 60
-  wait_for_home: 120
-  launch_di_app: 180
-  navigate_to_market: 30
-  search_gem: 15
-  default: 20
-```
-
-## Error Handling
-
-- **Template not found** — retries up to `max_retries`, then Back-press spam to clear UI, then force-kill and raise
-- **OCR failure** — logs error, saves debug screenshot to `debug/`, skips that listing, continues
-- **Game crash/disconnect** — detected by template timeout, force-kills BlueStacks, restarts cycle
-- **3 consecutive full-cycle failures** — exits with code 1
-
-## Troubleshooting
-
-**Retina scaling issues (clicks land in wrong place):**
-Run `uv run di-market setup test-retina` and set `display.retina_scale` in `config.yaml` to match the detected scale.
-
-**Template confidence too low:**
-Re-capture with `setup capture`. Avoid capturing regions that change (animations, dynamic text). Crop tightly to the static UI element. Lower the `confidence` value in `config.yaml` if the element has minor rendering variance.
-
-**OCR returns garbage:**
-Check `debug/` screenshots. The OCR pipeline expects light text on dark background (or vice versa). If the price region has complex backgrounds, adjust the preprocessing in `vision.py` (`ocr_region` function — threshold method, scale factor).
-
-**`tesseract` not found:**
-Ensure Tesseract is installed via Homebrew and on PATH. Verify with `tesseract --version`.
-
-**pyautogui can't take screenshots:**
-macOS requires screen recording permission. Grant it in System Settings → Privacy & Security → Screen Recording for your terminal app.
-
-**Keyboard input not reaching BlueStacks:**
-Ensure BlueStacks is the focused window. If `pyautogui.typewrite()` doesn't work, try changing `select_all_method` in config. As a last resort, character input may need to be slowed down (increase the `interval` parameter in `typewrite`).
-
-**BlueStacks is sluggish:**
-Increase `timeout_multiplier` in `config.yaml` (e.g. 1.5 or 2.0) to globally scale all wait timeouts without editing each step.
+**No OCR.** The agent reads game state from screenshots directly — no Tesseract, no text parsing. Template matching locates UI elements; the agent interprets everything else visually.

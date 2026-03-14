@@ -69,10 +69,6 @@ class Config:
     def templates_dir(self) -> Path:
         return self.project_dir / "templates"
 
-    @property
-    def debug_dir(self) -> Path:
-        return self.project_dir / "debug"
-
     def get_timeout(self, step_name: str) -> float:
         """Get the timeout for a named step, scaled by timeout_multiplier."""
         raw = self.step_timeouts.get(step_name, self.step_timeouts.get("default", 20.0))

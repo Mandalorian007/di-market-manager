@@ -8,14 +8,13 @@ dependencies = [
     "pyautogui>=0.9.54",
     "opencv-python>=4.8.0",
     "Pillow>=10.0.0",
-    "pytesseract>=0.3.10",
     "click>=8.1.0",
     "pyyaml>=6.0",
     "matplotlib>=3.8.0",
 ]
 
 [project.scripts]
-di-market = "di_market_manager.cli:cli"
+dimm = "di_market_manager.cli:cli"
 
 [build-system]
 requires = ["hatchling"]
