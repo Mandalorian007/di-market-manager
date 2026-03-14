@@ -199,6 +199,21 @@ def cmd_numpad(field: str, value: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+
+@cli.command("notify")
+@click.argument("payload_json")
+def cmd_notify(payload_json: str) -> None:
+    """Send a Discord notification. PAYLOAD_JSON is the full JSON body."""
+    from di_market_manager import actions
+
+    s = _make_session()
+    _output(actions.notify_discord(s, payload_json), success_key="success")
+
+
+# ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
 

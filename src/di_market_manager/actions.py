@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import subprocess
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime
 
 import cv2
@@ -247,6 +249,45 @@ def numpad_enter(s: Session, field: str, value: int) -> dict:
     time.sleep(1.0)
 
     result = {"action": "numpad", "field": field, "value": value, "success": True}
+    s.record(**result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1482416854621487147/1h-xXAcPVduX_RXxluQ4J5VZmBgcOLDIBmWHA-Jr9iXwTvlcVRNTYCY8rIORoOJ_PqXa"
+
+
+def notify_discord(s: Session, payload_json: str) -> dict:
+    """POST a JSON payload to the Discord webhook."""
+    try:
+        req = urllib.request.Request(
+            DISCORD_WEBHOOK_URL,
+            data=payload_json.encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "dimm/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            status = resp.status
+    except urllib.error.HTTPError as exc:
+        # Discord returns 204 No Content on success; urllib treats non-200 as error
+        if 200 <= exc.code < 300:
+            status = exc.code
+        else:
+            result = {"action": "notify", "success": False, "error": str(exc), "status": exc.code}
+            s.record(**result)
+            return result
+    except (urllib.error.URLError, OSError) as exc:
+        result = {"action": "notify", "success": False, "error": str(exc)}
+        s.record(**result)
+        return result
+
+    result = {"action": "notify", "success": True, "status": status}
     s.record(**result)
     return result
 
