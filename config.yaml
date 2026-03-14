@@ -75,6 +75,9 @@ templates:
   numpad:
     file: templates/numpad.png
     confidence: 0.85
+  bulk_buy_exit_button:
+    file: templates/bulk_buy_exit_button.png
+    confidence: 0.85
 regions:
   numpad:
     x: 1294

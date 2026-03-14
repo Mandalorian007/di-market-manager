@@ -1,7 +1,7 @@
 # Scan Gem Prices via Bulk Buy
 
 ## Goal
-Query current gem prices on the Diablo Immortal marketplace using the Bulk Buy feature as a query engine.
+Query current gem prices on the Diablo Immortal marketplace using the Bulk Buy feature as a query engine. Produce a summary table of supply at three price tiers for each gem.
 
 ## Agent Behavior
 Follow the workflow steps in order. After each command, verify the expected result before moving on. If something breaks — a click misses, a template isn't found, the UI is in an unexpected state — **intervene immediately**:
@@ -12,14 +12,25 @@ Follow the workflow steps in order. After each command, verify the expected resu
 
 Do not blindly retry failed commands. Diagnose first, then act. Track every error you correct so you can report them at the end.
 
-## Final Reply
-When the workflow is complete, include an **Errors Corrected** section listing every issue encountered and how it was resolved. If none, report "None."
+## Final Report
+When the workflow is complete, present a **Market Scan Report** table:
+
+| Gem | Total on Market (≤400) | Count ≤150 | Count ≤100 |
+|-----|------------------------|------------|------------|
+| Citrine | | | |
+| Topaz | | | |
+| Sapphire | | | |
+| Aquamarine | | | |
+
+Fill each cell with the purchase count read from the Bulk Buy dialog at that price tier. If the result shows "NONE", record 0.
+
+Also include an **Errors Corrected** section listing every issue encountered and how it was resolved. If none, report "None."
 
 ## How Bulk Buy Works as a Query Engine
-- Set **Price Limit** to a target platinum amount (e.g., 150)
+- Set **Price Limit** to a target platinum amount
 - Set **Purchase Limit** to 9999 (max)
 - The game caps the purchase count at the actual number of gems available at ≤ that price
-- Take a snapshot → read the purchase count, total cost, and preview listings visually
+- Take a snapshot → read the purchase count visually
 
 ## Prerequisites
 - BlueStacks Air running on macOS with Diablo Immortal installed
@@ -46,6 +57,9 @@ When the workflow is complete, include an **Errors Corrected** section listing e
 | `dimm kill` | Force kill BlueStacks |
 
 All commands return JSON to stdout.
+
+## Gems to Scan
+`gem_citrine`, `gem_topaz`, `gem_sapphire`, `gem_aquamarine`
 
 ## Workflow Steps
 
@@ -89,40 +103,42 @@ dimm click market_button             # opens NPC dialog
 dimm wait 3
 dimm click services_button           # NPC dialog → Market UI
 dimm wait-for gem_tab --timeout 30   # market UI loaded
-dimm click gem_tab                   # ensure gem tab selected
+dimm click gem_tab                   # gem tab = gem marketplace; selects normal gems listing
 dimm wait 2
 ```
 
-### 3. Select Gem
-Available gem templates: `gem_citrine`, `gem_topaz`, `gem_sapphire`, `gem_aquamarine`
+### 3. Scan Each Gem
+For each gem in order (`gem_citrine`, `gem_topaz`, `gem_sapphire`, `gem_aquamarine`):
 
+#### 3a. Select the gem and open Bulk Buy
 ```bash
-dimm click gem_citrine               # select the gem
+dimm click <gem_template>            # select the gem from listing
 dimm wait 2
 dimm click bulk_buy_button           # open Bulk Buy dialog
 dimm wait 2
 ```
 
-### 4. Query Price via Bulk Buy
+#### 3b. Query three price tiers
+For each price in `[400, 150, 100]`:
 ```bash
-dimm numpad price 150                # set price ceiling to 150 platinum
+dimm numpad price <N>                # set price ceiling
 dimm numpad purchase 9999            # set max purchase (game caps at available)
-dimm snapshot --name "citrine_150"   # capture result
+dimm snapshot --name "<gem>_<price>" # capture result
 ```
+**Read the snapshot visually** — record the purchase count shown. If "NONE", record 0.
 
-**Read the snapshot visually** to determine:
-- How many gems are available at ≤ 150 platinum
-- Total cost shown
-- Whether result shows "NONE" (0 available)
-
-### 5. Repeat for Other Prices/Gems
-Adjust price to scan different price points (e.g., 100, 150, 200, 250).
-Press escape to back out, then select next gem.
-
-### 6. Exit
+#### 3c. Return to gem listing
+After all three price queries for a gem:
 ```bash
-dimm press escape                    # close bulk buy
+dimm click bulk_buy_exit_button      # close Bulk Buy dialog
 dimm wait 2
+dimm click gem_tab                   # gem tab = gem marketplace; returns to normal gems listing
+dimm wait 2
+```
+These two clicks in order return to the main gem listing, ready to select the next gem.
+
+### 4. Exit
+```bash
 dimm press escape                    # close market
 dimm wait-for in_game_hud            # verify back on main screen
 dimm press escape                    # open quit dialog
@@ -136,7 +152,3 @@ dimm click exit_ok_button            # confirm exit
 - If completely lost, `dimm kill` and restart the flow.
 - Use `dimm check <template>` to verify expected UI state before proceeding.
 - Always diagnose before retrying — understand *why* something failed.
-
-## Gems to Scan
-From config: tourmaline, ruby, sapphire, citrine, topaz, aquamarine (normal gems)
-Legendary: blood-soaked-jade (5-star)

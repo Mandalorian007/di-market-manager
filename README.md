@@ -161,6 +161,23 @@ di-market-manager/
 └── snapshots/                   # screenshots from dimm snapshot
 ```
 
+### Capturing New Templates
+
+When running via an LLM agent (Claude Code), `dimm setup capture` requires piped stdin since the agent terminal doesn't support interactive `input()`. Pipe the template name and type before launching:
+
+```bash
+# 1. Focus BlueStacks so the screenshot captures the game
+open -a BlueStacks
+
+# 2. Run capture with the template name and type piped via stdin
+#    "t" = template, "r" = region
+echo -e "my_button_name\nt" | dimm setup capture
+```
+
+The matplotlib window will open with a screenshot. Draw a rectangle around the UI element, then close the window. The piped name and type are consumed automatically — no manual typing needed.
+
+To capture multiple templates, run the command once per template with the game navigated to the correct screen each time.
+
 ### Design Principles
 
 **CLI as DSL.** Every UI interaction is a CLI command with validated arguments. The agent calls `dimm click market_button`, not a Python function. This makes workflows inspectable, replayable, and tool-agnostic.
