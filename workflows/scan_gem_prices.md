@@ -3,6 +3,18 @@
 ## Goal
 Query current gem prices on the Diablo Immortal marketplace using the Bulk Buy feature as a query engine.
 
+## Agent Behavior
+Follow the workflow steps in order. After each command, verify the expected result before moving on. If something breaks — a click misses, a template isn't found, the UI is in an unexpected state — **intervene immediately**:
+
+1. Take a `snapshot` and read it visually to understand what went wrong.
+2. Use primitives (`press escape`, `click`, `check`, `wait`) to recover.
+3. Resume the workflow from the appropriate step.
+
+Do not blindly retry failed commands. Diagnose first, then act. Track every error you correct so you can report them at the end.
+
+## Final Reply
+When the workflow is complete, include an **Errors Corrected** section listing every issue encountered and how it was resolved. If none, report "None."
+
 ## How Bulk Buy Works as a Query Engine
 - Set **Price Limit** to a target platinum amount (e.g., 150)
 - Set **Purchase Limit** to 9999 (max)
@@ -37,6 +49,18 @@ All commands return JSON to stdout.
 
 ## Workflow Steps
 
+### 0. Focus BlueStacks
+Before any UI interaction, bring BlueStacks to the foreground:
+```bash
+open -a BlueStacks                   # focus the emulator window
+```
+Do this at the start of the workflow and again any time focus may have shifted (e.g., after a long wait or terminal interaction).
+
+When the workflow is complete, refocus the terminal so the user sees the results:
+```bash
+open -a Terminal                     # return focus to the user
+```
+
 ### 1. Launch (if needed)
 ```bash
 dimm status                          # check if running
@@ -45,7 +69,16 @@ dimm wait 20                         # wait for boot
 dimm click bluestacks_home_button    # reveal app tiles
 dimm click di_app_icon               # launch DI
 dimm wait 30                         # DI load time
-dimm click tap_to_play
+```
+
+**Tap to Play — requires login delay:**
+```bash
+dimm wait-for tap_to_play            # wait for title screen
+dimm wait 4                          # IMPORTANT: auto-login needs time to complete
+dimm click tap_to_play               # now safe to tap
+```
+
+```bash
 dimm click enter_world
 dimm wait-for in_game_hud --timeout 180
 ```
@@ -96,10 +129,11 @@ dimm click exit_ok_button            # exit game (if desired)
 ```
 
 ## Error Recovery
-- If a `click` fails (template not found), take a `snapshot` to assess current screen state
-- If stuck, `dimm press escape` to back out, then re-navigate
-- If completely lost, `dimm kill` and restart the flow
-- Use `dimm check <template>` to verify expected UI state before proceeding
+- If a `click` fails (template not found), take a `snapshot` and read it visually to assess current screen state.
+- If the UI is in an unexpected state, use `dimm press escape` to back out, then re-navigate.
+- If completely lost, `dimm kill` and restart the flow.
+- Use `dimm check <template>` to verify expected UI state before proceeding.
+- Always diagnose before retrying — understand *why* something failed.
 
 ## Gems to Scan
 From config: tourmaline, ruby, sapphire, citrine, topaz, aquamarine (normal gems)
