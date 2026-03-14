@@ -124,8 +124,10 @@ Press escape to back out, then select next gem.
 dimm press escape                    # close bulk buy
 dimm wait 2
 dimm press escape                    # close market
-dimm wait 2
-dimm click exit_ok_button            # exit game (if desired)
+dimm wait-for in_game_hud            # verify back on main screen
+dimm press escape                    # open quit dialog
+dimm wait-for exit_ok_button         # wait for quit dialog to appear
+dimm click exit_ok_button            # confirm exit
 ```
 
 ## Error Recovery
